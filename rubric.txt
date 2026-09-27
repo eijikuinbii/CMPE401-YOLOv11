@@ -1,0 +1,70 @@
+Instructor-defined Project (2): 
+
+Grading: Two instructor-defined projects contribute 30% towards the final grade. 
+Scheduling: Detailed grading rubrics and project component requirements will be released during the Project Session. All project deliverables must be submitted on Canvas by December 13. 
+Format: CMPE 401 students are required to complete TWO instructor-defined projects, either individually or in groups of two. 
+Deliverables: Each project submission must include the following components, 
+ PROJECTS RELEASED!!!
+
+CMPE 401_Instructor-defined Project 1.pdfDownload CMPE 401_Instructor-defined Project 1.pdf
+
+CMPE 401_Instructor-defined Project 2.pdfDownload CMPE 401_Instructor-defined Project 2.pdf
+
+ 
+
+Project Submission 
+
+Description 
+
+Code and Project Repository 
+
+A complete and well-documented GitHub repository containing all source code, trained models (or instructions to reproduce them), and experimental results. 
+
+The repository must include a comprehensive README that describes the project objective, models, usage instructions, and key findings, etc, forming part of the student’s professional technical portfolio.
+
+Project Final Submission (1)
+Project Final Submission (1)
+Criteria	Ratings	Pts
+This criterion is linked to a Learning OutcomeProject Repository 1
+Grading Criteria
+25 to >22.5 pts
+Exceed Expectations_Level 2 Outstanding
+Awarded to submissions that clearly stand out among all submissions, demonstrating outstanding depth of understanding and top-tier quality beyond the baseline. Level 2 Outstanding
+22.5 to >20.0 pts
+Exceed Expectations_Level 1 Strong
+Awarded to submissions that demonstrate strong understanding, clear organization, and solid evidence of project progress and team contributions. Level 1 Strong
+20 to >18.5 pts
+Meets Expectations
+Submissions that satisfy the main report requirements with adequate clarity, relevant content, and sufficient understanding of the project.
+18.5 to >15.0 pts
+Developing
+Submissions that show some effort toward meeting the requirements, but with acceptable/limited clarity or only a basic demonstration of understanding and contributions.
+15 to >0.0 pts
+Beginning
+Submissions show limited evidence of understanding or progress, or fail to address some main requirements, or are substantially incomplete.
+0 pts
+Not Submitted
+No submission.
+25 pts
+This criterion is linked to a Learning OutcomeProject Repository 2
+Grading Criteria
+15 to >13.0 pts
+Exceed Expectations_Level 2 Outstanding
+Awarded to submissions that clearly stand out among all submissions, demonstrating outstanding depth of understanding and top-tier quality beyond the baseline. Level 2 Outstanding
+13 to >11.5 pts
+Exceed Expectations_Level 1 Strong
+Awarded to submissions that demonstrate strong understanding, clear organization, and solid evidence of project progress and team contributions. Level 1 Strong
+11.5 to >8.5 pts
+Meets Expectations
+Submissions that satisfy the main report requirements with adequate clarity, relevant content, and sufficient understanding of the project.
+8.5 to >5.0 pts
+Developing
+Submissions that show some effort toward meeting the requirements, but with acceptable/limited clarity or only a basic demonstration of understanding and contributions.
+5 to >0.0 pts
+Beginning
+Submissions show limited evidence of understanding or progress, or fail to address some main requirements, or are substantially incomplete.
+0 pts
+Not Submitted
+No submission.
+15 pts
+Total Points: 40 

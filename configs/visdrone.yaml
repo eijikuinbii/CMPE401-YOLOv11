@@ -1,0 +1,25 @@
+# VisDrone-DET dataset config for Ultralytics YOLO.
+# Paths are relative to this repo root. Run scripts/convert_visdrone.py first
+# to produce the YOLO-format labels under datasets/VisDrone/.
+#
+# The 10 VisDrone-DET evaluation classes. Note: the raw VisDrone annotation
+# files use category ids 0..11, where 0 ("ignored regions") and 11 ("others")
+# are dropped during conversion, and the remaining ids 1..10 are remapped to
+# the 0..9 YOLO ids below (see scripts/convert_visdrone.py).
+
+path: datasets/VisDrone      # dataset root (relative to repo root)
+train: VisDrone2019-DET-train/images
+val: VisDrone2019-DET-val/images
+test: VisDrone2019-DET-test-dev/images   # used for final reporting
+
+names:
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor

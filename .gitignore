@@ -1,0 +1,39 @@
+# ---- Datasets & large data (never commit; download via scripts) ----
+datasets/VisDrone/
+datasets/**/images/
+datasets/**/labels/
+datasets/**/annotations/
+*.zip
+*.tar
+*.tar.gz
+
+# ---- Model weights & training runs ----
+*.pt
+*.onnx
+*.engine
+runs/
+weights/
+results/runs/
+
+# Keep pretrained-download cache out of git
+*.cache
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ---- Editor / OS ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Allow small result artifacts to be committed (curves, tables) ----
+!results/figures/
+!results/tables/
+!results/*.md
