@@ -37,9 +37,9 @@ normalized YOLO boxes; category ids `1..10` map to YOLO classes `0..9`, and
 ```bash
 python -m venv .venv
 # Windows: .venv\Scripts\activate   |   Linux/Mac: source .venv/bin/activate
+# Install a CUDA torch build first (Python 3.13 + RTX 3060 -> cu124):
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
-# Install a CUDA torch build matching your GPU (RTX 3060 laptop -> cu121):
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
 Verify the GPU is visible:

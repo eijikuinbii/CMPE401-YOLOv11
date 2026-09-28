@@ -1,7 +1,8 @@
 # Core
 ultralytics>=8.3.0        # YOLOv11 (and YOLOv26 when released in your version)
-# Install a CUDA build of torch to match your GPU/driver. On the RTX 3060 laptop:
-#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# Install a CUDA build of torch to match your GPU/driver. On the RTX 3060 laptop
+# with Python 3.13, install torch FIRST from the cu124 index, then this file:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 torch>=2.1.0
 torchvision>=0.16.0
 

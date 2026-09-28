@@ -17,8 +17,14 @@ Results (weights, results.csv, curves, confusion matrix) are written to
 results/runs/<name>/.
 """
 import argparse
+from pathlib import Path
 
 from ultralytics import YOLO
+
+# Repo root (this file lives in <repo>/scripts/). Used to force an absolute
+# output path so Ultralytics writes to <repo>/results/runs/<name> instead of
+# nesting the runs under its own default runs_dir (e.g. runs/detect/...).
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def main():
@@ -76,7 +82,7 @@ def main():
         cos_lr=args.cos_lr,
         seed=args.seed,
         resume=args.resume,
-        project="results/runs",
+        project=str(REPO_ROOT / "results" / "runs"),
         name=args.name,
         exist_ok=False,
         plots=True,   # saves loss curves, PR curves, confusion matrix
