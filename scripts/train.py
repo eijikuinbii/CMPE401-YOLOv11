@@ -91,13 +91,26 @@ def main():
         train_kwargs["lr0"] = args.lr0
     train_kwargs.update(overrides)
 
+    # Resume: load the run's last checkpoint and allow writing back into the same
+    # dir. Ultralytics resumes from the weights the model was built with, so we must
+    # point YOLO at last.pt rather than the fresh pretrained model.
+    if args.resume:
+        ckpt = Path(train_kwargs["project"]) / args.name / "weights" / "last.pt"
+        if not ckpt.exists():
+            raise SystemExit(f"--resume set but no checkpoint found at {ckpt}")
+        train_kwargs["exist_ok"] = True
+        model_src = str(ckpt)
+    else:
+        model_src = args.model
+
     print("Training with settings:")
     for k, v in train_kwargs.items():
         print(f"  {k}: {v}")
+    print(f"  model: {model_src}")
 
-    model = YOLO(args.model)
+    model = YOLO(model_src)
     model.train(**train_kwargs)
-    print(f"\nDone. Results in results/runs/{args.name}/")
+    print(f"\nDone. Results in {train_kwargs['project']}/{args.name}/")
 
 
 if __name__ == "__main__":
