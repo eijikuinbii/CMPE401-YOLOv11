@@ -15,16 +15,53 @@ Examples:
 
 Results (weights, results.csv, curves, confusion matrix) are written to
 results/runs/<name>/.
+
+On Colab, pass --sync-dir <Drive folder> to mirror the run directory into Google
+Drive after every epoch and once more when training ends. Training itself stays
+on the fast local disk, and a failed Drive copy is logged but never stops
+training. With --resume, a run that only survives in --sync-dir is copied back
+to local disk first, so a fresh Colab session can continue it.
 """
 import argparse
+import shutil
+import time
 from pathlib import Path
 
+import torch
 from ultralytics import YOLO
 
 # Repo root (this file lives in <repo>/scripts/). Used to force an absolute
 # output path so Ultralytics writes to <repo>/results/runs/<name> instead of
 # nesting the runs under its own default runs_dir (e.g. runs/detect/...).
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def mirror(src: Path, dst: Path):
+    """Copy new/changed files from src to dst (one-way, never deletes)."""
+    for f in src.rglob("*"):
+        if not f.is_file():
+            continue
+        t = dst / f.relative_to(src)
+        s_stat = f.stat()
+        if t.exists() and t.stat().st_size == s_stat.st_size and t.stat().st_mtime >= s_stat.st_mtime:
+            continue
+        t.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, t)
+
+
+def add_sync_callbacks(model, sync_root: Path):
+    """Mirror trainer.save_dir into sync_root/<run name> each epoch and at the end."""
+    def sync(trainer, final=False):
+        dst = sync_root / Path(trainer.save_dir).name
+        try:
+            mirror(Path(trainer.save_dir), dst)
+            if final:
+                print(f"\n[sync] final copy of run saved to {dst}")
+        except Exception as e:  # Drive hiccup: keep training, retry next epoch
+            print(f"\n[sync] WARNING: copy to {dst} failed ({e}); will retry")
+
+    model.add_callback("on_fit_epoch_end", sync)
+    model.add_callback("on_train_end", lambda tr: sync(tr, final=True))
 
 
 def main():
@@ -46,6 +83,9 @@ def main():
     ap.add_argument("--cos-lr", action="store_true", help="Use cosine LR schedule.")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--resume", action="store_true")
+    ap.add_argument("--sync-dir", default=None,
+                    help="Folder (e.g. on Google Drive) to mirror the run into after every epoch "
+                         "and at the end of training.")
     ap.add_argument("--extra", nargs="*", default=[],
                     help="Extra key=value overrides passed straight to Ultralytics "
                          "(e.g. mosaic=0.0 close_mosaic=0 weight_decay=0.001).")
@@ -91,13 +131,32 @@ def main():
         train_kwargs["lr0"] = args.lr0
     train_kwargs.update(overrides)
 
+    sync_root = Path(args.sync_dir) if args.sync_dir else None
+    run_dir = Path(train_kwargs["project"]) / args.name
+    if sync_root:
+        backup = sync_root / args.name
+        if args.resume and not (run_dir / "weights" / "last.pt").exists() \
+                and (backup / "weights" / "last.pt").exists():
+            # New Colab session: the local run is gone, pull it back from Drive.
+            print(f"Restoring run from {backup} -> {run_dir}")
+            mirror(backup, run_dir)
+        elif not args.resume and backup.exists() and any(backup.iterdir()):
+            # Don't mix a fresh run into an old run's folder; keep the old one aside.
+            old = backup.with_name(f"{backup.name}_prev_{time.strftime('%Y%m%d-%H%M%S')}")
+            print(f"Existing {backup} moved to {old}")
+            backup.rename(old)
+
     # Resume: load the run's last checkpoint and allow writing back into the same
     # dir. Ultralytics resumes from the weights the model was built with, so we must
     # point YOLO at last.pt rather than the fresh pretrained model.
     if args.resume:
-        ckpt = Path(train_kwargs["project"]) / args.name / "weights" / "last.pt"
+        ckpt = run_dir / "weights" / "last.pt"
         if not ckpt.exists():
             raise SystemExit(f"--resume set but no checkpoint found at {ckpt}")
+        # A finished run's last.pt has its optimizer stripped (epoch == -1); Ultralytics
+        # would then silently start a brand-new training run instead of resuming.
+        if torch.load(ckpt, map_location="cpu", weights_only=False).get("epoch", -1) < 0:
+            raise SystemExit(f"{ckpt} is from a run that already finished; nothing to resume.")
         train_kwargs["exist_ok"] = True
         model_src = str(ckpt)
     else:
@@ -109,8 +168,12 @@ def main():
     print(f"  model: {model_src}")
 
     model = YOLO(model_src)
+    if sync_root:
+        add_sync_callbacks(model, sync_root)
     model.train(**train_kwargs)
     print(f"\nDone. Results in {train_kwargs['project']}/{args.name}/")
+    if sync_root:
+        print(f"Mirrored to {sync_root / args.name}/")
 
 
 if __name__ == "__main__":
