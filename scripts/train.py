@@ -158,6 +158,9 @@ def main():
         if torch.load(ckpt, map_location="cpu", weights_only=False).get("epoch", -1) < 0:
             raise SystemExit(f"{ckpt} is from a run that already finished; nothing to resume.")
         train_kwargs["exist_ok"] = True
+        # The checkpoint remembers the save_dir it was trained in (e.g. /content/... on
+        # Colab); write back into this machine's run dir instead.
+        train_kwargs["save_dir"] = str(run_dir)
         model_src = str(ckpt)
     else:
         model_src = args.model
