@@ -8,8 +8,8 @@ contains a complete, reproducible pipeline: data download & conversion, baseline
 training, loss/fitting analysis, controlled experiments, an iterative
 improvement cycle, and an optional multi-version YOLO comparison.
 
-> **Status:** scaffold ready. Results tables/figures below are filled in as runs
-> complete. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
+> **Status:** Part I (baseline) and Part II (loss/fitting analysis) complete.
+> Parts III–V in progress. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
 
 ---
 
@@ -60,8 +60,8 @@ python scripts/visualize_labels.py --split VisDrone2019-DET-train --n 6   # sani
 
 | Where | Use for | Typical config |
 |---|---|---|
-| **RTX 3060 laptop (6 GB)** | pipeline dev, baseline, light experiments | `yolo11s`, imgsz 640, batch 4–8, AMP |
-| **Google Colab (T4/A100)** | large models, high-res, final/competition runs | `yolo11m`, imgsz 1280, batch 16 |
+| **RTX 3060 laptop (6 GB)** | pipeline dev, light experiments (e.g. `yolo11n`) | imgsz 640, AMP |
+| **Google Colab (T4/A100)** | baseline, large models, high-res, final/competition runs | `yolo11s` 640 batch 16 (baseline); `yolo11m` 1280 |
 
 The same scripts run in both places. Colab workflow:
 [`notebooks/colab_train.ipynb`](notebooks/colab_train.ipynb).
@@ -69,22 +69,23 @@ The same scripts run in both places. Colab workflow:
 ## 6. Reproduce the experiments
 
 ```bash
-# Part I — baseline (local 3060)
-python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 8 --epochs 100 --name baseline_s_640
+# Part I — baseline (run on a Colab T4 via notebooks/colab_train.ipynb, ~4.2 h)
+python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 --name baseline_s_640
 
 # Part II — loss / fitting analysis
 python scripts/plot_curves.py results/runs/baseline_s_640
 
-# Part III — controlled experiments (examples)
+# Part III — controlled experiments (examples). Keep every setting except the one
+# under test identical to the baseline (incl. --batch 16) so results are comparable.
 python scripts/train.py --model yolo11m.pt --imgsz 1280 --batch 16 --epochs 100 --name exp_m_1280        # resolution + capacity
-python scripts/train.py --model yolo11s.pt --imgsz 640  --batch 8  --epochs 100 --name exp_s_cos --cos-lr # LR schedule
+python scripts/train.py --model yolo11s.pt --imgsz 640  --batch 16 --epochs 100 --name exp_s_cos --cos-lr # LR schedule
 
 # Part IV — iterative improvement (example: overfitting control via augmentation/reg)
-python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 8 --epochs 100 --name exp_s_reg \
+python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 --name exp_s_reg \
     --extra weight_decay=0.001 mosaic=1.0 close_mosaic=10
 
 # Part V (optional) — multi-version comparison
-python scripts/train.py --model yolov8s.pt --imgsz 640 --batch 8 --epochs 100 --name compare_v8s_640
+python scripts/train.py --model yolov8s.pt --imgsz 640 --batch 16 --epochs 100 --name compare_v8s_640
 
 # Evaluate any run on val / test-dev
 python scripts/evaluate.py --weights results/runs/baseline_s_640/weights/best.pt --split test
@@ -110,23 +111,37 @@ results/                     # runs/ (gitignored), figures/, tables/
 docs/REPORT.md               # graded technical write-up (Parts I–V)
 ```
 
-## 8. Results (fill in)
+## 8. Results
 
 ### Baseline (Part I)
+`yolo11s`, imgsz 640, batch 16, 100 epochs, Colab T4. Metrics from `best.pt` (epoch 71).
+
 | Split | mAP@50-95 | mAP@50 | Precision | Recall |
 |---|---|---|---|---|
-val | 0.225 | 0.385 | 0.516 | 0.396 |
-test-dev | 0.186 | 0.327 | 0.463 | 0.352 |
+| val | 0.225 | 0.385 | 0.516 | 0.396 |
+| test-dev | 0.186 | 0.327 | 0.463 | 0.352 |
 
-### Loss Curve (Part II)
+### Loss curves (Part II)
 
-<img width="1200" height="750" alt="image" src="https://github.com/user-attachments/assets/16bf805e-0251-4ba9-b15a-76fb5f19028c" />
+![Training vs validation loss](results/figures/loss_baseline_s_640.png)
+
+![Validation mAP@50-95](results/figures/map_baseline_s_640.png)
 
 ### Experiments summary (Parts III–V)
 _Auto-generated into `results/tables/experiments.md`._
 
 ## 9. Key findings
-_Summarize once runs complete — see [`docs/REPORT.md`](docs/REPORT.md) for the full analysis._
+- **Baseline:** `yolo11s` at 640px reaches **0.225 mAP@50-95 on val** and **0.186 on test-dev**.
+- **Mild overfitting after epoch ~71.** Train and val loss fall together until ~epoch 40;
+  val loss then plateaus (~3.15), bottoms out at epoch 71 (also the best-mAP epoch), and
+  rises slightly to 3.19 by epoch 100 while train loss keeps falling (3.09 → 2.69).
+- **Mosaic shut-off widens the gap.** In the last 10 epochs (`close_mosaic=10`) train loss
+  drops sharply but val loss does not follow — the easier, un-mosaiced images are fit, not
+  generalized.
+- **Capacity-limited on small objects.** ~85% of VisDrone boxes are smaller than 32×32 px
+  at 640px input. Large, frequent classes do well (car 0.54 mAP@50-95) while small or rare
+  ones lag (bicycle 0.06, awning-tricycle 0.09, people 0.12).
+- Full analysis (dataset size, model capacity, per-class results): [`docs/REPORT.md`](docs/REPORT.md).
 
 ## 10. Reproducibility notes
 - All runs use `--seed` (default 0). Weights and `runs/` are gitignored; commit
