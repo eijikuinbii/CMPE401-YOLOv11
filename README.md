@@ -113,12 +113,14 @@ docs/REPORT.md               # graded technical write-up (Parts I–V)
 ## 8. Results (fill in)
 
 ### Baseline (Part I)
-| Metric | Value |
-|---|---|
-| mAP@50-95 | _tbd_ |
-| mAP@50 | _tbd_ |
-| Precision | _tbd_ |
-| Recall | _tbd_ |
+| Split | mAP@50-95 | mAP@50 | Precision | Recall |
+|---|---|---|---|---|
+val | 0.225 | 0.385 | 0.516 | 0.396 |
+test-dev | 0.186 | 0.327 | 0.463 | 0.352 |
+
+### Loss Curve (Part II)
+
+<img width="1200" height="750" alt="image" src="https://github.com/user-attachments/assets/16bf805e-0251-4ba9-b15a-76fb5f19028c" />
 
 ### Experiments summary (Parts III–V)
 _Auto-generated into `results/tables/experiments.md`._
