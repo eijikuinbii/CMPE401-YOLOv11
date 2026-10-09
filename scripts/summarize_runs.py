@@ -26,7 +26,7 @@ def best_row(run_dir: Path) -> dict:
     # pick the epoch with best mAP@50-95 (matches how best.pt is chosen)
     key = "metrics/mAP50-95(B)"
     row = df.loc[df[key].idxmax()] if key in df else df.iloc[-1]
-    out = {"run": run_dir.name, "epochs": int(df["epoch"].max()) + 1 if "epoch" in df else len(df)}
+    out = {"run": run_dir.name, "epochs": len(df)}  # one row per epoch
     for raw, pretty in COLS.items():
         out[pretty] = round(float(row[raw]), 4) if raw in df else None
     return out
