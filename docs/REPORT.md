@@ -1,12 +1,13 @@
 # CMPE 401 Project 1 — Technical Report
 
-> Parts I–II are complete; Parts III–V are filled in as those runs finish. Each
+> Parts I, II and IV (cycle 1) are complete; Part III, Part IV cycle 2 and Part V
+> are designed and queued in the Colab notebook. Each
 > section maps 1:1 to the required Parts in the project spec. Figures come from
 > `results/figures/`, tables from `results/tables/`.
 
 ## 0. Overview
 - **Team:** <name(s)>
-- **Primary model:** YOLOv11 (`yolo11s`, 9.4M parameters, 21.4 GFLOPs)
+- **Primary model:** YOLOv11 (`yolo11s`, 9.4M parameters, 21.7 GFLOPs at 640)
 - **Dataset:** VisDrone-DET (10 classes)
 - **Compute:** Google Colab T4 (baseline) + RTX 3060 laptop, 6 GB (pipeline dev, light runs)
 - **Repo:** <https://github.com/eijikuinbii/CMPE401-YOLOv11>
@@ -134,49 +135,175 @@ Total loss = box + cls + dfl.
 
 ---
 
-## Part III — Structured Experimental Design (≥1 round)
-State settings → report quantitative results → analyze. Suggested variables:
-model size (n/s/m), image resolution, augmentation, LR schedule, batch, epochs.
-Baseline numbers below are val-split metrics from Part I.
+## Part III — Structured Experimental Design
 
-| Run | Model | imgsz | batch | epochs | key change | mAP@50-95 | mAP@50 | P | R |
+> **Status:** designed; run `exp_n_640` is queued next in the Colab notebook.
+
+### Round 1 — Model capacity (yolo11n vs yolo11s)
+- **Question:** Part II concluded the baseline is mainly *capacity/resolution-limited*
+  (underfitting on small objects), with mild late overfitting. If capacity matters, a
+  smaller model should lose accuracy, and the loss should drop most on small and rare
+  classes. If the 6.5k-image dataset is the real limit, a smaller model should
+  overfit *less* and lose little accuracy.
+- **Controlled variable:** model size only: `yolo11n` (≈2.6M params) vs `yolo11s`
+  (9.4M). Everything else identical to the baseline: imgsz 640, batch 16, 100
+  epochs, optimizer auto, seed 0, default augmentation, Colab T4.
+- **Command:**
+  ```bash
+  python scripts/train.py --model yolo11n.pt --imgsz 640 --batch 16 --epochs 100 --name exp_n_640
+  ```
+
+| Run | Model | Params (M) | imgsz | batch | epochs | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| baseline_s_640 | yolo11s | 9.4 | 640 | 16 | 100 | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 |
+| exp_n_640 | yolo11n | | 640 | 16 | 100 | | | | | |
+
+**Results & analysis:** _pending run._ Compare: (1) overall and per-class mAP,
+(2) the train/val gap and the epoch where val loss is lowest (does the smaller model
+overfit later or less?), (3) the trade-off between accuracy, training time and speed.
+
+### Round 2 (optional) — Input resolution (640 vs 960)
+- **Question:** does giving the network more pixels per object (85% of boxes are
+  < 32×32 px at 640) raise mAP, and by how much on small classes?
+- **Controlled variable:** `imgsz` 640 → 960, `yolo11s`, everything else identical.
+  Costs ~2.25× compute per epoch (~9–10 h on a T4), so it runs only if GPU time allows.
+
+| Run | Model | imgsz | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 |
+|---|---|---|---|---|---|---|---|
+| baseline_s_640 | yolo11s | 640 | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 |
+| exp_s_960 | yolo11s | 960 | | | | | |
+
+---
+
+## Part IV — Iterative Model Improvement
+
+### Cycle 1 — L2 regularization (weight decay 0.0005 → 0.001)
+
+**1. Baseline.** `baseline_s_640` (Part I): val mAP@50-95 0.225, test-dev 0.186. Part II
+found mild overfitting after epoch 71: validation loss rises from 3.139 to 3.188 while
+training loss keeps falling, and the train/val gap grows from 0.20 to 0.49.
+
+**2. Experimental settings.** Identical to the baseline: `yolo11s`, imgsz 640,
+batch 16, 100 epochs, optimizer auto (MuSGD), lr0 0.01, seed 0, default augmentation
+with `close_mosaic=10`, Colab T4.
+
+**3. Controlled modification.** One change: `weight_decay` 0.0005 → 0.001.
+- **Principle:** weight decay adds an L2 penalty λ‖w‖² to the loss, which pulls weights
+  toward zero and limits how sharply the network can fit individual training images.
+  Larger λ means a smoother, lower-capacity function and should reduce overfitting.
+- **Effective strength:** Ultralytics scales weight decay by batch × accumulate / nbs
+  = 16 × 4 / 64 = 1, so the effective λ really doubles.
+- **Which weights:** it applies to conv weights (including MuSGD's Muon parameter
+  group), not to biases or BatchNorm.
+
+```bash
+python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 \
+    --name exp_s_640_wd001 --extra weight_decay=0.001
+```
+
+**4. Evaluation.** `best.pt` of each run, standalone evaluation:
+
+| Run | Change | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | test mAP@50 | Train time |
+|---|---|---|---|---|---|---|---|---|
+| baseline_s_640 | — | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 0.3265 | 4.16 h |
+| exp_s_640_wd001 | weight_decay 0.001 | 0.2276 | 0.3899 | 0.534 | 0.391 | 0.1854 | 0.3260 | 4.35 h |
+| **Δ** | | **+0.003** | +0.005 | +0.019 | −0.005 | **−0.001** | −0.001 | |
+
+![Loss: baseline vs weight decay](../results/figures/loss_baseline_s_640_vs_exp_s_640_wd001.png)
+
+![mAP: baseline vs weight decay](../results/figures/map_baseline_s_640_vs_exp_s_640_wd001.png)
+
+Training dynamics (total loss = box + cls + dfl):
+
+| Epoch | Train loss (base / wd) | Val loss (base / wd) | Gap (base / wd) | val mAP@50-95 (base / wd) |
+|---|---|---|---|---|
+| 40 | 3.152 / 3.179 | 3.184 / 3.188 | 0.032 / 0.008 | 0.217 / 0.218 |
+| 60 | 3.010 / 3.043 | 3.150 / 3.154 | 0.140 / 0.111 | 0.224 / 0.229 |
+| 73 | 2.931 / 2.963 | 3.151 / 3.139 | 0.220 / 0.177 | 0.226 / **0.230** |
+| 90 | 2.798 / 2.853 | 3.164 / 3.149 | 0.366 / 0.296 | 0.222 / 0.227 |
+| 100 | 2.694 / 2.691 | 3.188 / 3.186 | 0.493 / 0.495 | 0.217 / 0.221 |
+
+Per-class val mAP@50-95 changed by at most ±0.015 (largest gain: bus +0.015;
+largest drop: tricycle −0.007).
+
+**5. Analysis.**
+- **Weight decay did regularize while mosaic was on.** Over epochs 41–90, training
+  loss is on average 0.031 higher than the baseline at the same validation loss, so
+  the model fits the training set less tightly without generalizing worse. The gap at
+  epoch 90 shrinks from 0.37 to 0.30, and late-training mAP holds up better: the best
+  epoch moves from 71 to 73, and mAP at epoch 90 is 0.227 vs 0.222.
+- **The benefit disappears when mosaic switches off.** In the last 10 epochs
+  (`close_mosaic=10`), both runs drop to the same training loss (2.69) and gap (0.49).
+  Removing mosaic makes the training images far easier, and that change dominates the
+  small L2 penalty. The model then fits the training set equally tightly in both runs.
+- **The best model barely changed.** Validation +0.003 and test-dev −0.001 are within
+  what you would expect from a different random seed; we ran one seed per setting, so
+  this cannot be separated from noise. Precision rose (+0.019) and recall fell
+  (−0.005): the model became slightly more conservative, not better at finding objects.
+- **Why there is no real gain:** the overfitting was mild and late; best.pt is chosen
+  at the val-loss minimum anyway, so it already avoids most of it. The dominant
+  problem is underfitting on tiny objects (Part II), which regularization cannot fix,
+  because it limits capacity rather than adding it.
+
+**6. Conclusion.** Doubling weight decay is a valid regularizer here: it measurably
+narrows the train/val gap during the mosaic phase. But it does **not** improve the
+final detector, because (a) its effect is erased once mosaic is switched off, and (b)
+overfitting is not the factor limiting accuracy. This motivates two follow-ups:
+cycle 2 (keep mosaic on until the end) and the Part III capacity/resolution
+experiments, which target the real bottleneck.
+
+### Cycle 2 — Keep mosaic augmentation to the end (`close_mosaic=0`)
+
+> **Status:** queued after Part III in the Colab notebook.
+
+- **Baseline for comparison:** `baseline_s_640` (default `close_mosaic=10`).
+- **Hypothesis (from cycle 1):** both runs overfit fastest in the final 10 epochs,
+  exactly when mosaic is switched off. Mosaic acts as a strong data-level regularizer:
+  it makes new compositions and scales for every batch. Keeping it on to the end should
+  stop the late jump in the gap and keep validation loss from rising. The risk is that
+  without a final "clean images" phase, the model is less tuned to un-mosaiced images,
+  which is the format at test time.
+- **Controlled modification:** `close_mosaic` 10 → 0. Everything else identical.
+  ```bash
+  python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 \
+      --name exp_s_640_closemosaic0 --extra close_mosaic=0
+  ```
+
+| Run | Change | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | Gap @100 |
+|---|---|---|---|---|---|---|---|
+| baseline_s_640 | — | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 0.493 |
+| exp_s_640_closemosaic0 | close_mosaic 0 | | | | | | |
+
+**Evaluation / analysis / conclusion:** _pending run._
+
+---
+
+## Part V — Multi-Version YOLO Comparison (optional)
+
+> **Status:** prepared; `compare_v8s_640` is in the Colab run queue.
+
+Matched recipe: same size class ("s"), imgsz 640, batch 16, 100 epochs, optimizer
+auto, seed 0, default augmentation, same T4 GPU type, so differences come from the
+architecture. Params/GFLOPs and inference time come from each run's `metrics.json`
+(written by `scripts/evaluate.py`); training time from `summarize_runs.py`.
+
+| Model | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 | Params (M) | GFLOPs | Train time (T4) | Inference (ms/img, T4) |
 |---|---|---|---|---|---|---|---|---|---|
-| baseline | yolo11s | 640 | 16 | 100 | — | 0.225 | 0.385 | 0.516 | 0.396 |
-| exp1 | | | | | | | | | |
+| yolo11s | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 | 9.4 | 21.7 | 4.16 h | 7.8 |
+| yolov8s | | | | | | | | | |
 
-**Analysis:** <what changed and why>
-
----
-
-## Part IV — Iterative Model Improvement (≥1 cycle)
-Follow: Baseline → Experimental Settings → Controlled Modification → Evaluation
-→ Analysis → Conclusion. Examples: regularization, normalization, weight init,
-LR schedule, overfitting control.
-
-- **Hypothesis / principle:** <e.g. mosaic+higher weight_decay to curb overfit>
-- **Controlled modification:** <exact single change>
-
-| Run | Change | mAP@50-95 | mAP@50 | P | R | Δ vs baseline |
-|---|---|---|---|---|---|---|
-| baseline | — | 0.225 | 0.385 | 0.516 | 0.396 | — |
-| improved | | | | | | |
-
-**Justification & conclusion:** <did it work, and why in DL terms>
-
----
-
-## Part V — Multi-Version YOLO Comparison (OPTIONAL)
-Compare YOLOv11 against ≥1 other version (v8/v9/v10) under a matched recipe.
-
-| Model | mAP@50-95 | mAP@50 | Params (M) | Train time | Inference (ms/img) |
-|---|---|---|---|---|---|
-| yolo11s | 0.225 | 0.385 | 9.4 | ~4.2 h (T4) | ~7.8 (T4) |
-| yolov8s | | | | | |
-
-**Discussion:** <accuracy vs speed vs size trade-offs; confusion matrices>
+**Discussion:** _pending run._ Cover accuracy vs speed vs size trade-offs, per-class
+differences (especially small classes), and the confusion matrices
+(`eval_val/confusion_matrix_normalized.png` in each run folder).
 
 ---
 
 ## Reproducibility
-Exact commands to reproduce every run above are in the README. Seeds fixed via
-`--seed`. Environment: `requirements.txt`.
+- Exact commands for every run are in the README and in each section above.
+- Every run uses `--seed 0`. Environment: `requirements.txt`.
+- All Colab runs use `notebooks/colab_train.ipynb`; only its settings block changes
+  between experiments.
+- Re-evaluating the Colab-trained baseline `best.pt` on the local RTX 3060 gives the
+  same val mAP@50-95 (0.2248 vs 0.2247).
+- Limitation: one seed per configuration. Differences smaller than ~0.005 mAP should
+  be treated as within run-to-run noise.

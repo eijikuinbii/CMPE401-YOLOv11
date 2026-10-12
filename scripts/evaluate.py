@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ultralytics import YOLO
+from ultralytics.utils.torch_utils import get_flops, get_num_params
 
 # Absolute output path: a relative project gets nested under Ultralytics' own runs_dir.
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -61,6 +62,8 @@ def main():
         "precision": b.mp, "recall": b.mr,
         "per_class_mAP50-95": dict(zip(metrics.names.values(), map(float, b.maps))),
         "speed_ms_per_img": metrics.speed,
+        "params_M": get_num_params(model.model) / 1e6,
+        "GFLOPs": get_flops(model.model, args.imgsz),
     }
     out = Path(metrics.save_dir) / "metrics.json"
     out.write_text(json.dumps(summary, indent=2))

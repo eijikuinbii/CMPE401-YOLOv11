@@ -27,6 +27,13 @@ def best_row(run_dir: Path) -> dict:
     key = "metrics/mAP50-95(B)"
     row = df.loc[df[key].idxmax()] if key in df else df.iloc[-1]
     out = {"run": run_dir.name, "epochs": len(df)}  # one row per epoch
+    if "time" in df:
+        # 'time' is cumulative seconds and restarts from ~0 after each --resume,
+        # so add up per-epoch increments, counting a restart as a fresh start.
+        t = df["time"]
+        dt = t.diff().fillna(t.iloc[0])
+        dt[dt < 0] = t[dt < 0]
+        out["train_h"] = round(float(dt.sum()) / 3600, 2)
     for raw, pretty in COLS.items():
         out[pretty] = round(float(row[raw]), 4) if raw in df else None
     return out

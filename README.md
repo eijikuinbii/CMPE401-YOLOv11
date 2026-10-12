@@ -8,8 +8,8 @@ contains a complete, reproducible pipeline: data download & conversion, baseline
 training, loss/fitting analysis, controlled experiments, an iterative
 improvement cycle, and an optional multi-version YOLO comparison.
 
-> **Status:** Part I (baseline) and Part II (loss/fitting analysis) complete.
-> Parts III–V in progress. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
+> **Status:** Parts I, II and IV (cycle 1) complete. Part III, Part IV cycle 2 and
+> Part V are queued in the Colab notebook. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
 
 ---
 
@@ -75,23 +75,26 @@ python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 -
 # Part II — loss / fitting analysis
 python scripts/plot_curves.py results/runs/baseline_s_640
 
-# Part III — controlled experiments (examples). Keep every setting except the one
-# under test identical to the baseline (incl. --batch 16) so results are comparable.
-python scripts/train.py --model yolo11m.pt --imgsz 1280 --batch 16 --epochs 100 --name exp_m_1280        # resolution + capacity
-python scripts/train.py --model yolo11s.pt --imgsz 640  --batch 16 --epochs 100 --name exp_s_cos --cos-lr # LR schedule
+# Every experiment below runs on Colab via notebooks/colab_train.ipynb (edit the settings
+# block in cell 4). Only the variable under test differs from the baseline.
 
-# Part IV — iterative improvement (example: overfitting control via augmentation/reg)
-python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 --name exp_s_reg \
-    --extra weight_decay=0.001 mosaic=1.0 close_mosaic=10
+# Part III — model capacity (n vs s); optional round 2: resolution 640 -> 960
+python scripts/train.py --model yolo11n.pt --imgsz 640 --batch 16 --epochs 100 --name exp_n_640
+python scripts/train.py --model yolo11s.pt --imgsz 960 --batch 16 --epochs 100 --name exp_s_960
 
-# Part V (optional) — multi-version comparison
+# Part IV — cycle 1 (done): stronger L2 regularization
+python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 --name exp_s_640_wd001     --extra weight_decay=0.001
+# Part IV — cycle 2: keep mosaic augmentation on until the last epoch
+python scripts/train.py --model yolo11s.pt --imgsz 640 --batch 16 --epochs 100 --name exp_s_640_closemosaic0     --extra close_mosaic=0
+
+# Part V (optional) — multi-version comparison, matched recipe
 python scripts/train.py --model yolov8s.pt --imgsz 640 --batch 16 --epochs 100 --name compare_v8s_640
 
 # Evaluate any run on val / test-dev
 python scripts/evaluate.py --weights results/runs/baseline_s_640/weights/best.pt --split test
 
 # Build comparison table across runs
-python scripts/summarize_runs.py results/runs/baseline_s_640 results/runs/exp_m_1280 --out results/tables/experiments.md
+python scripts/summarize_runs.py results/runs/* --out results/tables/experiments.md
 ```
 
 ## 7. Repository layout
@@ -127,8 +130,18 @@ docs/REPORT.md               # graded technical write-up (Parts I–V)
 
 ![Validation mAP@50-95](results/figures/map_baseline_s_640.png)
 
+### Iterative improvement (Part IV, cycle 1): weight decay 0.0005 → 0.001
+| Run | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | Train time (T4) |
+|---|---|---|---|---|---|---|
+| baseline_s_640 | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 4.16 h |
+| exp_s_640_wd001 | 0.2276 | 0.3899 | 0.534 | 0.391 | 0.1854 | 4.35 h |
+
+![Loss: baseline vs weight decay](results/figures/loss_baseline_s_640_vs_exp_s_640_wd001.png)
+
 ### Experiments summary (Parts III–V)
-_Auto-generated into `results/tables/experiments.md`._
+All runs so far (per-epoch validation at each run's best epoch): [`results/tables/experiments.md`](results/tables/experiments.md).
+Queued: `exp_n_640` (Part III), `exp_s_640_closemosaic0` (Part IV cycle 2),
+`compare_v8s_640` (Part V).
 
 ## 9. Key findings
 - **Baseline:** `yolo11s` at 640px reaches **0.225 mAP@50-95 on val** and **0.186 on test-dev**.
@@ -141,6 +154,11 @@ _Auto-generated into `results/tables/experiments.md`._
 - **Capacity-limited on small objects.** ~85% of VisDrone boxes are smaller than 32×32 px
   at 640px input. Large, frequent classes do well (car 0.54 mAP@50-95) while small or rare
   ones lag (bicycle 0.06, awning-tricycle 0.09, people 0.12).
+- **Weight decay narrows the gap but doesn't raise accuracy.** Doubling it (0.0005 →
+  0.001) keeps training loss ~0.03 higher at the same val loss during the mosaic phase
+  (gap at epoch 90: 0.30 vs 0.37), but the effect disappears once mosaic switches off,
+  and the best model is unchanged (val +0.003, test −0.001 — within seed noise).
+  Overfitting is not the factor limiting accuracy; small-object underfitting is.
 - Full analysis (dataset size, model capacity, per-class results): [`docs/REPORT.md`](docs/REPORT.md).
 
 ## 10. Reproducibility notes
