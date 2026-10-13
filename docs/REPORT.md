@@ -1,7 +1,7 @@
 # CMPE 401 Project 1 — Technical Report
 
-> Parts I, II and IV (cycle 1) are complete; Part III, Part IV cycle 2 and Part V
-> are designed and queued in the Colab notebook. Each
+> Parts I–IV are complete (Part III round 1, Part IV cycle 1). Part V is running next;
+> Part III round 2 and Part IV cycle 2 are designed and queued in the Colab notebook. Each
 > section maps 1:1 to the required Parts in the project spec. Figures come from
 > `results/figures/`, tables from `results/tables/`.
 
@@ -137,30 +137,104 @@ Total loss = box + cls + dfl.
 
 ## Part III — Structured Experimental Design
 
-> **Status:** designed; run `exp_n_640` is queued next in the Colab notebook.
-
 ### Round 1 — Model capacity (yolo11n vs yolo11s)
-- **Question:** Part II concluded the baseline is mainly *capacity/resolution-limited*
-  (underfitting on small objects), with mild late overfitting. If capacity matters, a
-  smaller model should lose accuracy, and the loss should drop most on small and rare
-  classes. If the 6.5k-image dataset is the real limit, a smaller model should
-  overfit *less* and lose little accuracy.
-- **Controlled variable:** model size only: `yolo11n` (≈2.6M params) vs `yolo11s`
-  (9.4M). Everything else identical to the baseline: imgsz 640, batch 16, 100
-  epochs, optimizer auto, seed 0, default augmentation, Colab T4.
-- **Command:**
-  ```bash
-  python scripts/train.py --model yolo11n.pt --imgsz 640 --batch 16 --epochs 100 --name exp_n_640
-  ```
 
-| Run | Model | Params (M) | imgsz | batch | epochs | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| baseline_s_640 | yolo11s | 9.4 | 640 | 16 | 100 | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 |
-| exp_n_640 | yolo11n | | 640 | 16 | 100 | | | | | |
+**Question.** Part II concluded the baseline is mainly *capacity/resolution-limited*
+(underfitting on small objects), with mild late overfitting. Two hypotheses predict
+different outcomes for a smaller model:
+- **H1, capacity-limited:** a smaller model loses clear accuracy, most on small and
+  rare classes, and underfits more.
+- **H2, data-limited:** if the 6.5k-image dataset were the real limit, a smaller
+  model would lose little accuracy and overfit less.
 
-**Results & analysis:** _pending run._ Compare: (1) overall and per-class mAP,
-(2) the train/val gap and the epoch where val loss is lowest (does the smaller model
-overfit later or less?), (3) the trade-off between accuracy, training time and speed.
+**Settings.** Only the model size changes: `yolo11n` (2.6M params, 6.6 GFLOPs) vs
+`yolo11s` (9.4M params, 21.7 GFLOPs). Everything else is identical to the baseline:
+imgsz 640, batch 16, 100 epochs, optimizer auto, seed 0, default augmentation with
+`close_mosaic=10`, Colab T4. The yolo11n run was resumed once after a Colab
+disconnect (epochs 1–53, then 54–100).
+
+```bash
+python scripts/train.py --model yolo11n.pt --imgsz 640 --batch 16 --epochs 100 --name exp_n_640
+```
+
+**Quantitative results** (`best.pt` of each run, standalone evaluation):
+
+| Run | Model | Params (M) | GFLOPs | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | test mAP@50 | Inference (ms/img, T4) | Train time (T4) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| baseline_s_640 | yolo11s | 9.4 | 21.7 | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 0.3265 | 7.8 | 4.16 h |
+| exp_n_640 | yolo11n | 2.6 | 6.6 | 0.1872 | 0.3304 | 0.453 | 0.351 | 0.1537 | 0.2768 | 5.0 | 4.08 h |
+| **Δ (n vs s)** | | −72% | −70% | **−0.038 (−17%)** | −0.055 | −0.062 | −0.045 | **−0.033 (−17%)** | −0.050 | −35% | −2% |
+
+![Loss: yolo11s vs yolo11n](../results/figures/loss_baseline_s_640_vs_exp_n_640.png)
+
+![mAP: yolo11s vs yolo11n](../results/figures/map_baseline_s_640_vs_exp_n_640.png)
+
+Training dynamics (total loss = box + cls + dfl):
+
+| Epoch | Train loss (s / n) | Val loss (s / n) | Gap val − train (s / n) | val mAP@50-95 (s / n) |
+|---|---|---|---|---|
+| 20 | 3.355 / 3.709 | 3.317 / 3.626 | −0.039 / −0.083 | 0.199 / 0.154 |
+| 40 | 3.152 / 3.523 | 3.184 / 3.460 | 0.032 / −0.063 | 0.217 / 0.175 |
+| 60 | 3.010 / 3.403 | 3.150 / 3.397 | 0.140 / −0.006 | 0.224 / 0.185 |
+| 80 | 2.893 / 3.309 | 3.153 / 3.365 | 0.260 / 0.056 | 0.222 / 0.187 |
+| 90 | 2.798 / 3.258 | 3.164 / 3.356 | 0.366 / 0.098 | 0.222 / 0.190 |
+| 100 | 2.694 / 3.115 | 3.188 / 3.369 | 0.493 / 0.253 | 0.217 / 0.189 |
+
+| | yolo11s | yolo11n |
+|---|---|---|
+| Epoch of best val mAP | 71 | 89 |
+| Epoch of lowest val loss | 71 (3.139) | 90 (3.356) |
+| Val-loss rise after its minimum | +0.048 | +0.013 |
+
+Per-class val mAP@50-95 (sorted by relative loss):
+
+| Class | yolo11s | yolo11n | Δ | Relative |
+|---|---|---|---|---|
+| bicycle | 0.056 | 0.034 | −0.022 | −39% |
+| pedestrian | 0.192 | 0.146 | −0.046 | −24% |
+| motor | 0.200 | 0.152 | −0.048 | −24% |
+| tricycle | 0.152 | 0.117 | −0.035 | −23% |
+| people | 0.117 | 0.093 | −0.024 | −21% |
+| truck | 0.238 | 0.190 | −0.048 | −20% |
+| bus | 0.372 | 0.314 | −0.057 | −15% |
+| van | 0.293 | 0.252 | −0.041 | −14% |
+| awning-tricycle | 0.085 | 0.074 | −0.011 | −13% |
+| car | 0.544 | 0.500 | −0.044 | −8% |
+
+**Analysis.**
+- **The data supports H1 (capacity-limited), not H2.** Cutting parameters by 72% costs
+  17% mAP@50-95 on both val and test-dev, a drop of 0.033–0.038, far above the ~0.005
+  that a different random seed could explain. If data were the main limit, the smaller
+  model would have lost much less.
+- **yolo11n underfits for most of training.** Its validation loss stays *below* its
+  training loss until about epoch 60. Training images are heavily augmented, and a
+  small model cannot fit them even as well as the clean validation images. Both losses
+  stay well above yolo11s throughout (val 3.36 vs 3.14 at best). Its best epoch is 89,
+  not 71: it is still improving when yolo11s has already started to overfit.
+- **Overfitting scales with capacity.** yolo11s's train/val gap grows steadily after
+  epoch 40. yolo11n's gap stays near zero until epoch 80, and validation loss rises
+  only +0.013 after its minimum (vs +0.048). The larger model can memorize more of
+  the 6.5k training images; the smaller one cannot. This is the classic
+  bias–variance trade-off: less capacity means less variance (overfitting) but more
+  bias (underfitting), and here the extra bias costs far more accuracy than the
+  variance it saves.
+- **yolo11n overfits only when mosaic switches off.** Most of its gap (0.098 → 0.253)
+  appears in the last 10 epochs, after `close_mosaic=10`. This is the same pattern
+  seen in Part IV cycle 1, and it independently supports cycle 2 (`close_mosaic=0`).
+- **Small objects suffer most.** The largest relative losses are on small objects:
+  bicycle −39%, pedestrian and motor −24%, people −21%. Car, the largest and most
+  common class, loses only 8%. With fewer channels, the stride-8 feature map has less
+  room to encode a ~14×14 px object, so detail-heavy small classes lose the most.
+- **Efficiency trade-off.** yolo11n is 35% faster at inference (5.0 vs 7.8 ms/img on a
+  T4) with 70% fewer FLOPs, but training was not faster (4.08 vs 4.16 h). On Colab,
+  each epoch seems to be limited by loading and augmenting images on the CPU rather
+  than by GPU compute, so a smaller network saves no training time on this hardware.
+
+**Conclusion.** On VisDrone, accuracy is limited by model capacity, not by
+dataset size. A smaller model underfits more and loses the most on small objects;
+the benefit of less overfitting is far too small to make up for it. So the way to
+improve accuracy is to add capacity or input resolution (round 2 below), rather
+than more regularization (Part IV cycle 1).
 
 ### Round 2 (optional) — Input resolution (640 vs 960)
 - **Question:** does giving the network more pixels per object (85% of boxes are
@@ -250,11 +324,12 @@ narrows the train/val gap during the mosaic phase. But it does **not** improve t
 final detector, because (a) its effect is erased once mosaic is switched off, and (b)
 overfitting is not the factor limiting accuracy. This motivates two follow-ups:
 cycle 2 (keep mosaic on until the end) and the Part III capacity/resolution
-experiments, which target the real bottleneck.
+experiments, which target the real bottleneck. Part III round 1 has since confirmed
+that accuracy is limited by model capacity: a smaller model loses 17% mAP.
 
 ### Cycle 2 — Keep mosaic augmentation to the end (`close_mosaic=0`)
 
-> **Status:** queued after Part III in the Colab notebook.
+> **Status:** queued in the Colab notebook (after Part V).
 
 - **Baseline for comparison:** `baseline_s_640` (default `close_mosaic=10`).
 - **Hypothesis (from cycle 1):** both runs overfit fastest in the final 10 epochs,
@@ -280,7 +355,7 @@ experiments, which target the real bottleneck.
 
 ## Part V — Multi-Version YOLO Comparison (optional)
 
-> **Status:** prepared; `compare_v8s_640` is in the Colab run queue.
+> **Status:** `compare_v8s_640` is the next Colab run.
 
 Matched recipe: same size class ("s"), imgsz 640, batch 16, 100 epochs, optimizer
 auto, seed 0, default augmentation, same T4 GPU type, so differences come from the
@@ -291,6 +366,7 @@ architecture. Params/GFLOPs and inference time come from each run's `metrics.jso
 |---|---|---|---|---|---|---|---|---|---|
 | yolo11s | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 | 9.4 | 21.7 | 4.16 h | 7.8 |
 | yolov8s | | | | | | | | | |
+| yolo11n (ref., Part III) | 0.187 | 0.330 | 0.453 | 0.351 | 0.154 | 2.6 | 6.6 | 4.08 h | 5.0 |
 
 **Discussion:** _pending run._ Cover accuracy vs speed vs size trade-offs, per-class
 differences (especially small classes), and the confusion matrices

@@ -8,8 +8,8 @@ contains a complete, reproducible pipeline: data download & conversion, baseline
 training, loss/fitting analysis, controlled experiments, an iterative
 improvement cycle, and an optional multi-version YOLO comparison.
 
-> **Status:** Parts I, II and IV (cycle 1) complete. Part III, Part IV cycle 2 and
-> Part V are queued in the Colab notebook. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
+> **Status:** Parts I–IV complete. Part V (yolov8s) is the next Colab run; Part III
+> round 2 and Part IV cycle 2 are queued. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
 
 ---
 
@@ -130,6 +130,14 @@ docs/REPORT.md               # graded technical write-up (Parts I–V)
 
 ![Validation mAP@50-95](results/figures/map_baseline_s_640.png)
 
+### Controlled experiment (Part III): model capacity, yolo11n vs yolo11s
+| Run | Params | GFLOPs | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | Inference (T4) |
+|---|---|---|---|---|---|---|---|---|
+| yolo11s (baseline) | 9.4M | 21.7 | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 7.8 ms |
+| yolo11n | 2.6M | 6.6 | 0.1872 | 0.3304 | 0.453 | 0.351 | 0.1537 | 5.0 ms |
+
+![Loss: yolo11s vs yolo11n](results/figures/loss_baseline_s_640_vs_exp_n_640.png)
+
 ### Iterative improvement (Part IV, cycle 1): weight decay 0.0005 → 0.001
 | Run | val mAP@50-95 | val mAP@50 | val P | val R | test mAP@50-95 | Train time (T4) |
 |---|---|---|---|---|---|---|
@@ -140,8 +148,8 @@ docs/REPORT.md               # graded technical write-up (Parts I–V)
 
 ### Experiments summary (Parts III–V)
 All runs so far (per-epoch validation at each run's best epoch): [`results/tables/experiments.md`](results/tables/experiments.md).
-Queued: `exp_n_640` (Part III), `exp_s_640_closemosaic0` (Part IV cycle 2),
-`compare_v8s_640` (Part V).
+Next: `compare_v8s_640` (Part V). Queued: `exp_s_640_closemosaic0` (Part IV cycle 2),
+`exp_s_960` (Part III round 2).
 
 ## 9. Key findings
 - **Baseline:** `yolo11s` at 640px reaches **0.225 mAP@50-95 on val** and **0.186 on test-dev**.
@@ -154,6 +162,11 @@ Queued: `exp_n_640` (Part III), `exp_s_640_closemosaic0` (Part IV cycle 2),
 - **Capacity-limited on small objects.** ~85% of VisDrone boxes are smaller than 32×32 px
   at 640px input. Large, frequent classes do well (car 0.54 mAP@50-95) while small or rare
   ones lag (bicycle 0.06, awning-tricycle 0.09, people 0.12).
+- **Accuracy is limited by model capacity, not dataset size.** yolo11n (−72% params) loses
+  17% mAP@50-95 on both val and test-dev, underfits for most of training (its val loss stays
+  below its train loss until ~epoch 60) and barely overfits. Small objects suffer most
+  (bicycle −39%, pedestrian −24%) vs car −8%. It is 35% faster at inference but was not
+  faster to train on Colab, where each epoch seems to be limited by CPU data loading.
 - **Weight decay narrows the gap but doesn't raise accuracy.** Doubling it (0.0005 →
   0.001) keeps training loss ~0.03 higher at the same val loss during the mosaic phase
   (gap at epoch 90: 0.30 vs 0.37), but the effect disappears once mosaic switches off,

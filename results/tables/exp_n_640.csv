@@ -1,0 +1,2 @@
+run,epochs,train_h,precision,recall,mAP@50,mAP@50-95
+exp_n_640,100,4.08,0.4551,0.3502,0.339,0.19
