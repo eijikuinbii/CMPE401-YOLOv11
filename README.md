@@ -8,8 +8,8 @@ contains a complete, reproducible pipeline: data download & conversion, baseline
 training, loss/fitting analysis, controlled experiments, an iterative
 improvement cycle, and an optional multi-version YOLO comparison.
 
-> **Status:** Parts I–IV complete. Part V (yolov8s) is the next Colab run; Part III
-> round 2 and Part IV cycle 2 are queued. Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
+> **Status:** complete. All required parts (I–IV) and the optional Part V are done.
+> Full write-up in [`docs/REPORT.md`](docs/REPORT.md). Full write-up in [`docs/REPORT.md`](docs/REPORT.md).
 
 ---
 
@@ -146,10 +146,24 @@ docs/REPORT.md               # graded technical write-up (Parts I–V)
 
 ![Loss: baseline vs weight decay](results/figures/loss_baseline_s_640_vs_exp_s_640_wd001.png)
 
-### Experiments summary (Parts III–V)
-All runs so far (per-epoch validation at each run's best epoch): [`results/tables/experiments.md`](results/tables/experiments.md).
-Next: `compare_v8s_640` (Part V). Queued: `exp_s_640_closemosaic0` (Part IV cycle 2),
-`exp_s_960` (Part III round 2).
+### Multi-version comparison (Part V): YOLO11s vs YOLOv8s, matched recipe
+| Model | val mAP@50-95 | val mAP@50 | test mAP@50-95 | Params | GFLOPs | Train time (T4) | Inference (T4) |
+|---|---|---|---|---|---|---|---|
+| yolo11s | 0.2247 | 0.3849 | 0.1863 | 9.4M | 21.7 | 4.16 h | ~7 ms |
+| yolov8s | 0.2291 | 0.3943 | 0.1839 | 11.1M | 28.7 | 3.92 h | ~7 ms |
+
+![Loss: yolo11s vs yolov8s](results/figures/loss_baseline_s_640_vs_compare_v8s_640.png)
+
+### All runs
+| Run | Part | Change vs baseline | val mAP@50-95 | test mAP@50-95 |
+|---|---|---|---|---|
+| baseline_s_640 | I | — | 0.2247 | 0.1863 |
+| exp_n_640 | III | yolo11n | 0.1872 | 0.1537 |
+| exp_s_640_wd001 | IV | weight_decay 0.001 | 0.2276 | 0.1854 |
+| compare_v8s_640 | V | yolov8s | 0.2291 | 0.1839 |
+
+Per-epoch validation at each run's best epoch, with training time:
+[`results/tables/experiments.md`](results/tables/experiments.md).
 
 ## 9. Key findings
 - **Baseline:** `yolo11s` at 640px reaches **0.225 mAP@50-95 on val** and **0.186 on test-dev**.
@@ -172,7 +186,16 @@ Next: `compare_v8s_640` (Part V). Queued: `exp_s_640_closemosaic0` (Part IV cycl
   (gap at epoch 90: 0.30 vs 0.37), but the effect disappears once mosaic switches off,
   and the best model is unchanged (val +0.003, test −0.001 — within seed noise).
   Overfitting is not the factor limiting accuracy; small-object underfitting is.
-- Full analysis (dataset size, model capacity, per-class results): [`docs/REPORT.md`](docs/REPORT.md).
+- **YOLO11 vs YOLOv8: same accuracy, better efficiency.** YOLOv8s is +0.004 on val
+  but −0.002 on test-dev — a tie within seed noise — while needing 18% more parameters
+  and 32% more FLOPs. Inference (~7 ms on a T4) and training time are about the same.
+  Both models make the same mistakes: 34–41% of pedestrians, people and bicycles are
+  missed entirely, and van is confused with car 41–43% of the time.
+- **Overall:** accuracy on VisDrone is limited by capacity and input resolution for tiny
+  objects, not by data size, regularization or YOLO generation. The most promising next
+  step is higher input resolution (designed as `exp_s_960`, not run within the GPU budget).
+- Full analysis (dataset size, model capacity, per-class results, confusion matrices,
+  future work): [`docs/REPORT.md`](docs/REPORT.md).
 
 ## 10. Reproducibility notes
 - All runs use `--seed` (default 0). Weights and `runs/` are gitignored; commit

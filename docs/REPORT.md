@@ -1,7 +1,8 @@
 # CMPE 401 Project 1 — Technical Report
 
-> Parts I–IV are complete (Part III round 1, Part IV cycle 1). Part V is running next;
-> Part III round 2 and Part IV cycle 2 are designed and queued in the Colab notebook. Each
+> All required parts (I–IV) and the optional Part V are complete. Two further
+> experiments (Part III round 2, Part IV cycle 2) are designed but were not run within
+> the GPU budget; see [Future work](#future-work-designed-not-run). Each
 > section maps 1:1 to the required Parts in the project spec. Figures come from
 > `results/figures/`, tables from `results/tables/`.
 
@@ -236,11 +237,14 @@ the benefit of less overfitting is far too small to make up for it. So the way t
 improve accuracy is to add capacity or input resolution (round 2 below), rather
 than more regularization (Part IV cycle 1).
 
-### Round 2 (optional) — Input resolution (640 vs 960)
+### Round 2 (optional, not run) — Input resolution (640 vs 960)
+
+> **Status:** designed but not run within the GPU budget; see Future work.
+
 - **Question:** does giving the network more pixels per object (85% of boxes are
   < 32×32 px at 640) raise mAP, and by how much on small classes?
 - **Controlled variable:** `imgsz` 640 → 960, `yolo11s`, everything else identical.
-  Costs ~2.25× compute per epoch (~9–10 h on a T4), so it runs only if GPU time allows.
+  Costs ~2.25× compute per epoch (~9–10 h on a T4).
 
 | Run | Model | imgsz | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 |
 |---|---|---|---|---|---|---|---|
@@ -327,9 +331,11 @@ cycle 2 (keep mosaic on until the end) and the Part III capacity/resolution
 experiments, which target the real bottleneck. Part III round 1 has since confirmed
 that accuracy is limited by model capacity: a smaller model loses 17% mAP.
 
-### Cycle 2 — Keep mosaic augmentation to the end (`close_mosaic=0`)
+### Cycle 2 (not run) — Keep mosaic augmentation to the end (`close_mosaic=0`)
 
-> **Status:** queued in the Colab notebook (after Part V).
+> **Status:** designed but not run within the GPU budget; see Future work. Part V
+> later confirmed the motivating pattern on a fourth run (YOLOv8s's gap also jumps
+> from 0.30 to 0.43 in the last 10 epochs).
 
 - **Baseline for comparison:** `baseline_s_640` (default `close_mosaic=10`).
 - **Hypothesis (from cycle 1):** both runs overfit fastest in the final 10 epochs,
@@ -349,28 +355,138 @@ that accuracy is limited by model capacity: a smaller model loses 17% mAP.
 | baseline_s_640 | — | 0.2247 | 0.3849 | 0.516 | 0.396 | 0.1863 | 0.493 |
 | exp_s_640_closemosaic0 | close_mosaic 0 | | | | | | |
 
-**Evaluation / analysis / conclusion:** _pending run._
 
 ---
 
 ## Part V — Multi-Version YOLO Comparison (optional)
 
-> **Status:** `compare_v8s_640` is the next Colab run.
+### Settings
+YOLOv11s vs YOLOv8s under a matched recipe: same size class ("s"), imgsz 640, batch 16,
+100 epochs, optimizer auto (MuSGD for both), seed 0, default augmentation with
+`close_mosaic=10`, Colab T4. Only the architecture differs. The YOLOv8s run was resumed
+once after a Colab disconnect (epochs 1–51, then 52–100).
 
-Matched recipe: same size class ("s"), imgsz 640, batch 16, 100 epochs, optimizer
-auto, seed 0, default augmentation, same T4 GPU type, so differences come from the
-architecture. Params/GFLOPs and inference time come from each run's `metrics.json`
-(written by `scripts/evaluate.py`); training time from `summarize_runs.py`.
+```bash
+python scripts/train.py --model yolov8s.pt --imgsz 640 --batch 16 --epochs 100 --name compare_v8s_640
+```
 
-| Model | val mAP@50-95 | val mAP@50 | P | R | test mAP@50-95 | Params (M) | GFLOPs | Train time (T4) | Inference (ms/img, T4) |
-|---|---|---|---|---|---|---|---|---|---|
-| yolo11s | 0.225 | 0.385 | 0.516 | 0.396 | 0.186 | 9.4 | 21.7 | 4.16 h | 7.8 |
-| yolov8s | | | | | | | | | |
-| yolo11n (ref., Part III) | 0.187 | 0.330 | 0.453 | 0.351 | 0.154 | 2.6 | 6.6 | 4.08 h | 5.0 |
+Params and GFLOPs (at 640, 10 classes) and inference time come from each run's
+`metrics.json` (`scripts/evaluate.py`); training time from `scripts/summarize_runs.py`.
 
-**Discussion:** _pending run._ Cover accuracy vs speed vs size trade-offs, per-class
-differences (especially small classes), and the confusion matrices
-(`eval_val/confusion_matrix_normalized.png` in each run folder).
+### Comparison table
+
+| Model | val mAP@50-95 | val mAP@50 | val mAP@75 | val P | val R | test mAP@50-95 | test mAP@50 | Params (M) | GFLOPs | Train time (T4) | Inference (ms/img, T4, val / test) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| **yolo11s** | 0.2247 | 0.3849 | 0.2234 | 0.516 | 0.396 | **0.1863** | **0.3265** | **9.4** | **21.7** | 4.16 h | 7.8 / 7.0 |
+| **yolov8s** | **0.2291** | **0.3943** | **0.2272** | 0.519 | **0.409** | 0.1839 | 0.3244 | 11.1 | 28.7 | 3.92 h | 6.7 / 6.9 |
+| Δ (v8s − 11s) | +0.004 | +0.009 | +0.004 | +0.004 | +0.012 | −0.002 | −0.002 | +18% | +32% | −6% | ≈ same |
+| yolo11n (ref., Part III) | 0.1872 | 0.3304 | 0.1827 | 0.453 | 0.351 | 0.1537 | 0.2768 | 2.6 | 6.6 | 4.08 h | 5.0 / 4.2 |
+
+![Loss: yolo11s vs yolov8s](../results/figures/loss_baseline_s_640_vs_compare_v8s_640.png)
+
+![mAP: yolo11s vs yolov8s](../results/figures/map_baseline_s_640_vs_compare_v8s_640.png)
+
+Training dynamics:
+
+| | yolo11s | yolov8s |
+|---|---|---|
+| Epoch of best val mAP | 71 (0.227) | 72 (0.232) |
+| Epoch of lowest val loss | 71 (3.139) | 70 (3.132) |
+| Val-loss rise after its minimum | +0.048 | +0.028 |
+| Train/val gap at epoch 90 / 100 | 0.366 / 0.493 | 0.296 / 0.432 |
+| Val mAP@50-95 at epoch 100 | 0.217 | 0.227 |
+
+Per-class val mAP@50-95: differences are within ±0.011 for 9 of 10 classes; the
+largest is bus (0.372 → 0.400, +0.028). On test-dev every class is within ±0.014.
+
+### Confusion matrices (val, normalized by true class)
+
+| Error type | yolo11s | yolov8s |
+|---|---|---|
+| people missed (predicted as background) | 0.40 | 0.40 |
+| bicycle missed | 0.41 | 0.40 |
+| pedestrian missed | 0.34 | 0.34 |
+| van predicted as car | 0.41 | 0.43 |
+| people predicted as pedestrian | 0.22 | 0.21 |
+| bicycle predicted as motor | 0.20 | 0.20 |
+| awning-tricycle predicted as tricycle | 0.21 | 0.16 |
+| car correct | 0.70 | 0.71 |
+
+Files: `results/runs/{baseline_s_640,compare_v8s_640}/eval_val/confusion_matrix_normalized.png`
+(gitignored, reproduce with the commands above).
+
+### Discussion
+- **Accuracy: a tie.** YOLOv8s is +0.004 on val but −0.002 on test-dev. Both
+  differences are within the ~0.005 that a different random seed could produce, and they
+  point in opposite directions on the two splits, so neither model is more accurate
+  on this task.
+- **Efficiency: YOLO11 wins.** YOLO11s reaches the same accuracy with 15% fewer
+  parameters (9.4M vs 11.1M) and 24% fewer FLOPs (21.7 vs 28.7 GFLOPs). This matches
+  YOLO11's design goal: blocks like C3k2 and C2PSA get more out of each parameter than
+  YOLOv8's C2f.
+- **Speed: no measurable difference on a T4.** Inference is ~7 ms/img for both. Despite
+  having fewer FLOPs, YOLO11s is not faster: at this size, GPU time depends more on
+  memory access and the number of separate layer operations than on arithmetic, and
+  YOLO11's attention block adds operations. The measurements also come from different
+  Colab sessions, so ~1 ms differences are within timing noise. Training time is also the
+  same (≈150 s/epoch), consistent with Part III's finding that training on Colab is
+  limited by CPU data loading, not by the model.
+- **Training dynamics:** both reach their best epoch at 70–72, but YOLOv8s's validation
+  loss rises less afterwards (+0.028 vs +0.048) and its mAP stays flatter (0.227 vs 0.217
+  at epoch 100). With one seed per model we cannot say whether this is an architectural
+  property; in practice it does not matter, because `best.pt` is taken at the
+  best epoch for both.
+- **Both models make the same mistakes.** The confusion matrices are nearly identical.
+  The dominant error is *missed detections*: 34–41% of pedestrians, people and bicycles
+  are predicted as background. The main class confusions are between visually similar
+  classes at aerial scale: van → car (41–43%), people → pedestrian (21–22%),
+  bicycle → motor (20%), awning-tricycle → tricycle (16–21%). Because both architectures
+  fail the same way, these errors come from the data (tiny objects, similar-looking
+  classes seen from above), not from architecture choice.
+- **Conclusion:** on VisDrone at 640px, moving between YOLO generations changes
+  efficiency, not accuracy. The accuracy ceiling comes from small objects and input
+  resolution (Parts II–III), which neither architecture addresses at this size and
+  input resolution.
+
+---
+
+## Conclusion
+
+| Run | Purpose | val mAP@50-95 | test mAP@50-95 | Outcome |
+|---|---|---|---|---|
+| baseline_s_640 | Part I baseline | 0.2247 | 0.1863 | reference |
+| exp_n_640 | Part III: smaller model | 0.1872 | 0.1537 | −17%: capacity-limited |
+| exp_s_640_wd001 | Part IV: 2× weight decay | 0.2276 | 0.1854 | gap narrows, accuracy unchanged |
+| compare_v8s_640 | Part V: YOLOv8s | 0.2291 | 0.1839 | same accuracy, 24% more FLOPs |
+
+1. **The task is limited by capacity and input resolution, not by data or regularization.**
+   85% of objects are smaller than 32×32 px at 640 input. A smaller model loses 17% mAP,
+   mostly on small classes, while stronger regularization and a different architecture
+   leave accuracy unchanged.
+2. **Overfitting is real but secondary.** It is mild, appears after ~epoch 70, is
+   strongest once mosaic augmentation switches off, and `best.pt` already avoids it.
+   Weight decay narrows the gap without improving the best model.
+3. **YOLO11's advantage is efficiency.** It matches YOLOv8 accuracy with fewer parameters
+   and FLOPs; on a T4 that does not translate into faster inference or training.
+4. **Recommended model:** `yolo11s` at 640 (`baseline_s_640` or `exp_s_640_wd001`) for
+   the best accuracy per FLOP; `yolo11n` when inference speed matters most.
+
+## Future work (designed, not run)
+
+These two experiments are fully specified and queued in the Colab notebook, but were
+not run within the free-Colab GPU budget.
+
+- **Part III round 2 — resolution 640 → 960** (`exp_s_960`, ~9–10 h on a T4). Every
+  result above points to resolution as the most promising lever: it gives each tiny object
+  more pixels on the stride-8 feature map. Expected to gain most on pedestrian, people and
+  bicycle, the classes with the highest miss rates. This is also the candidate model for
+  the optional VisDrone test-challenge.
+- **Part IV cycle 2 — keep mosaic to the end** (`close_mosaic=0`, ~4.2 h). All four runs
+  show their train/val gap widening fastest in the last 10 epochs, right after mosaic
+  switches off. Keeping mosaic on should remove that jump; the open question is whether
+  the model loses accuracy without a final phase on clean, un-mosaiced images.
+- **Multiple seeds:** repeating key runs with 2–3 seeds would put error bars on the
+  ±0.005 differences seen in Part IV and Part V.
 
 ---
 

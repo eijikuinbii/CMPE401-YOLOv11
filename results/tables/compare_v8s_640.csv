@@ -1,0 +1,2 @@
+run,epochs,train_h,precision,recall,mAP@50,mAP@50-95
+compare_v8s_640,100,3.92,0.5204,0.4086,0.4044,0.232
